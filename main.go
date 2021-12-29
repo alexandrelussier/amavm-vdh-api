@@ -90,35 +90,6 @@ type GeoJson struct {
 	Features []GeoJsonFeature `json:"features"`
 }
 
-type AssetContentType string
-
-const (
-	ImageJpeg AssetContentType = "image/jpeg"
-	ImagePng  AssetContentType = "image/png"
-)
-
-type ObservationRequestAsset struct {
-	ContentType AssetContentType `json:"contentType"`
-	Data        []byte           `json:"data"`
-}
-
-type ObservationRequest struct {
-	Assets     []ObservationRequestAsset `json:"assets"`
-	Attributes []string                  `json:"attributes"`
-	Comment    string                    `json:"comment"`
-	DeviceId   string                    `json:"deviceId"`
-	Position   [2]float64                `json:"position"`
-	Timestamp  int64                     `json:"timestamp"`
-}
-
-type ObservationStatus string
-
-const (
-	Pending  ObservationStatus = "pending"
-	Rejected ObservationStatus = "rejected"
-	Valid    ObservationStatus = "valid"
-)
-
 var BicylePaths GeoJson
 var Observations []observation.ReportedObservation
 
@@ -143,21 +114,13 @@ var internalError = M{"message": "internal error"}
 var bookNotFound = M{"message": "book not found"}
 
 func createNewObservation(c echo.Context) {
-	reqData := &ObservationRequest{}
+	reqData := &observation.ObservationRequest{}
 	_ = c.Bind(reqData)
 
 	obsrv := &observation.ReportedObservation{
-		Status: observation.Pending,
-		Observation: observation.ObservationRequest{
-			Assets:     reqData.Assets,
-			Attributes: reqData.Attributes,
-			Comment:    reqData.Comment,
-			DeviceId:   reqData.DeviceId,
-			Position:   reqData.Position,
-			Timestamp:  reqData.Timestamp,
-		},
+		Status:      observation.Pending,
+		Observation: *reqData,
 	}
-	obsrv.Observation = reqData
 
 	err := mgm.Coll(obsrv).Save(obsrv)
 
