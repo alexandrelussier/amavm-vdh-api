@@ -1,73 +1,42 @@
-import { Config } from "@config";
-import { AssetsService, DummyLocalAssetsService, S3AssetsService } from "@services/assets.service";
+import { Config, ConfigService } from "@config";
+import { AssetsService, DummyLocalAssetsService } from "@services/assets.service";
 import { BicyclePathsService, MongoDbBicyclePathsService } from "@services/bicycle-paths.service";
 import { GeoSourceService, MTLOpenDataGeoSourceService } from "@services/geo-source.service";
 import { MongoDbObservationsService, ObservationsService } from "@services/observations.service";
 import { DefaultSyncService, SyncService } from "@services/sync.service";
-import * as uno from "uno-serverless";
-import { httpClientFactory } from "uno-serverless";
-import * as unoAws from "uno-serverless-aws";
-
-export enum ExecutionMode {
-  LocalDev = "localdev",
-  RestOfTheWorld = "restoftheworld",
-}
 
 /** The specification for the container. */
 export interface Container {
   assetsService(): AssetsService;
   bicyclePathsService(): BicyclePathsService;
-  configService(): uno.ConfigService;
-  environmentName(): string;
-  executionMode(): ExecutionMode;
   geoSourceService(): GeoSourceService;
   observationsService(): ObservationsService;
   syncService(): SyncService;
 }
 
-/** Options for container creation. */
-export interface ContainerOptions {
-  mode: ExecutionMode;
-  stage: string;
-}
+const configService = new ConfigService();
 
 /** Definition of factories for the container. */
-export const createContainer = uno.createContainerFactory<Container, ContainerOptions>({
-  assetsService: ({ container, options }) => options.mode === ExecutionMode.LocalDev
-    ? new DummyLocalAssetsService()
-    : new S3AssetsService({
-      bucket: container.configService().get(Config.AssetsBucket),
-      websiteRoot: container.configService().get(Config.AssetsRoot),
-    }),
+export const createContainer: Container = {
+  assetsService: () => new DummyLocalAssetsService(),
 
-  bicyclePathsService: ({ container }) => new MongoDbBicyclePathsService({
-    db: container.configService().get(Config.MongoDbDb),
-    url: container.configService().get(Config.MongoDbUrl),
+  bicyclePathsService: () => new MongoDbBicyclePathsService({
+    db: configService.get(Config.MongoDbDb),
+    url: configService.get(Config.MongoDbUrl),
   }),
 
-  configService: ({ options }) => options.mode === ExecutionMode.LocalDev
-    ? new uno.JSONFileConfigService({ debug: true, path: "./local.config.json" })
-    : new unoAws.SSMParameterStoreConfigService({
-      path: `/amavm/vdh-api/${options.stage}`,
-    }),
+  geoSourceService: () => new MTLOpenDataGeoSourceService(
+    { bicyclePathsSourceUrl: configService.get(Config.MTLOpenDataBicyclePathUrl) }),
 
-  environmentName: ({ options }) => options.stage,
-
-  executionMode: ({ options }) => options.mode,
-
-  geoSourceService: ({ container }) => new MTLOpenDataGeoSourceService(
-    { bicyclePathsSourceUrl: container.configService().get(Config.MTLOpenDataBicyclePathUrl) },
-    httpClientFactory()),
-
-  observationsService: ({ container }) => new MongoDbObservationsService(
+  observationsService: () => new MongoDbObservationsService(
     {
-      db: container.configService().get(Config.MongoDbDb),
-      url: container.configService().get(Config.MongoDbUrl),
+      db: configService.get(Config.MongoDbDb),
+      url: configService.get(Config.MongoDbUrl),
     },
-    container.assetsService()),
+    createContainer.assetsService()),
 
-  syncService: ({ container }) => new DefaultSyncService(
-    container.assetsService(),
-    container.geoSourceService(),
-    container.bicyclePathsService()),
-});
+  syncService: () => new DefaultSyncService(
+    createContainer.assetsService(),
+    createContainer.geoSourceService(),
+    createContainer.bicyclePathsService()),
+};

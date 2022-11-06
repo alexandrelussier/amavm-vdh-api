@@ -1,31 +1,25 @@
-import { httpFunc } from "@common";
-import { Container } from "@container";
 import { BicyclePathNetwork, BicyclePathsRequest, BicyclePathType } from "@entities/bicycle-paths";
-import { httpRouter } from "uno-serverless";
+import app from "@app";
 
-export const handler = httpFunc()
-  .handler(httpRouter<Container>({
-    "": {
-      get: async ({ event, services: { bicyclePathsService } }) => {
+export const handler = app.get("/api/v1/bicycle-paths/:bbox/:borough/:limit/:near/:network/:nextToken/:numberOfLanes/:type", async (req, res) => {
+  const {bbox, borough, limit, near, network, nextToken, numberOfLanes, type} = req.params;
         const request: BicyclePathsRequest = {
-          bbox: event.parameters.bbox
-            ? event.parameters.bbox.split(",")
+          bbox: bbox
+            ? bbox.split(",")
                 .map((x) => x.trim())
                 .map((x) => parseFloat(x))
             : undefined,
-          borough: event.parameters.borough,
-          limit: event.parameters.limit ? parseInt(event.parameters.limit, 10) : undefined,
-          near: event.parameters.near
-            ? event.parameters.near.split(",")
+          borough: borough,
+          limit: limit ? parseInt(limit, 10) : undefined,
+          near: near
+            ? near.split(",")
               .map((x) => x.trim())
               .map((x) => parseFloat(x))
             : undefined,
-          network: event.parameters.network as BicyclePathNetwork,
-          nextToken: event.parameters.nextToken,
-          numberOfLanes: event.parameters.numberOfLanes ? parseInt(event.parameters.numberOfLanes, 10) : undefined,
-          type: event.parameters.type as BicyclePathType,
+          network: network as BicyclePathNetwork,
+          nextToken: nextToken,
+          numberOfLanes: numberOfLanes ? parseInt(numberOfLanes, 10) : undefined,
+          type: type as BicyclePathType,
         };
-        return bicyclePathsService().find(request);
-      },
-    },
-  }));
+        return app.locals.container.bicyclePathsService().find(request);
+      });

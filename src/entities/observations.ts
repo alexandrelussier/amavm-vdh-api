@@ -1,5 +1,4 @@
 import { Position } from "geojson";
-import { WithContinuation } from "uno-serverless";
 
 export enum AssetContentType {
   Jpeg = "image/jpeg",
@@ -76,7 +75,7 @@ export enum GetObservationsRequestSort {
   TimestampDesc = "timestamp-desc",
 }
 
-export interface GetObservationsRequest extends WithContinuation {
+export interface GetObservationsRequest {  // al: with continuation remove (missing next token code)
   /** The attributes to filter by */
   attributes?: string[];
 
@@ -91,6 +90,14 @@ export interface GetObservationsRequest extends WithContinuation {
 
   /** The sort order. */
   sort: GetObservationsRequestSort;
+
+  nextToken?: string;
+}
+
+export interface ReportedObservationContinuationArray
+{
+  nextToken?: string;
+  items: ReportedObservation[];
 }
 
 export interface UpdateObservationStatusRequest {

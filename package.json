@@ -9,6 +9,7 @@
     "generate-openapi-schemas": "uno generate-schemas \"src/entities/*.ts\" -c ./tsconfig.json -f openapi3 -o openapi.yml",
     "prestart": "npm run generate-schemas",
     "start": "node --inspect ./node_modules/serverless/bin/serverless offline start -s local",
+    "build": "tsc",
     "test": "mocha --opts test/mocha.opts test/unit/**/*.test.ts",
     "test:watch": "mocha --opts test/mocha.opts --watch test/unit/**/*.test.ts",
     "test:e2e": "newman run test/e2e/e2e.collection.json",
@@ -29,16 +30,11 @@
     ]
   },
   "dependencies": {
-    "aws-sdk": "^2.339.0",
     "mime-types": "^2.1.21",
     "mongodb": "^3.1.8",
     "proj4": "^2.5.0",
     "source-map-support": "^0.5.9",
-    "uno-serverless": "^0.51.0",
-    "uno-serverless-aws": "^0.51.0",
-    "uno-serverless-jwt": "^0.51.0",
-    "uuid": "^3.3.2",
-    "windows-1252": "^1.0.0"
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
     "@types/chai": "^4.1.6",
@@ -63,12 +59,6 @@
     "nock": "^10.0.1",
     "node-ask": "^1.0.1",
     "nyc": "^13.1.0",
-    "serverless": "^1.36.1",
-    "serverless-api-stage": "^1.4.0",
-    "serverless-aws-cn": "^0.1.0",
-    "serverless-offline": "^4.0.0",
-    "serverless-plugin-aws-alerts": "^1.2.4",
-    "serverless-webpack": "^5.2.0",
     "sinon": "^7.0.0",
     "thread-loader": "^1.2.0",
     "ts-loader": "^5.2.2",
@@ -79,7 +69,6 @@
     "tslint-no-unused-expression-chai": "^0.1.4",
     "tslint-sonarts": "^1.8.0",
     "typescript": "^3.1.3",
-    "uno-serverless-cli": "^0.51.0",
     "webpack": "^4.22.0"
   }
 }

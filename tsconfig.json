@@ -3,13 +3,16 @@
     "target": "es2017",
     "outDir": "./dist",
     "module": "commonjs",
-    "strictNullChecks": true,
+    "strict": true,                                      /* Enable all strict type-checking options. */
     "skipLibCheck": true,
     "moduleResolution": "node",
+    "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables `allowSyntheticDefaultImports` for type compatibility. */
+    "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
     "sourceMap": true,
     "rootDir": "./",
     "baseUrl": ".",
     "paths": {
+      "@app": ["./src/app"],
       "@events/*": ["./src/events/*"],
       "@entities/*": ["./src/entities/*"],
       "@config": ["./src/config"],

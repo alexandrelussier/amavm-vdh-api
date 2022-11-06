@@ -1,5 +1,4 @@
 import { FeatureCollection, MultiLineString, Position } from "geojson";
-import { WithContinuation } from "uno-serverless";
 
 export enum BicyclePathType {
   Unknown = "unknown",
@@ -61,7 +60,7 @@ export interface BicyclePath {
   type: BicyclePathType;
 }
 
-export interface BicyclePathsRequest extends WithContinuation {
+export interface BicyclePathsRequest { // al: with continuation remove (missing next token code)
   /**
    * The bounding box to restrict bicycle path locations.
    * Parameters are: South West latitude, South West longitude, North East latitude, North East longitude
@@ -90,6 +89,8 @@ export interface BicyclePathsRequest extends WithContinuation {
 
   /** The type of bicycle path */
   type?: BicyclePathType;
+
+  nextToken?: string;
 }
 
 export interface BicyclePathFeature {
@@ -106,4 +107,10 @@ export interface GeoJSONBicyclePathProperties {
 
   /** The type of bicycle path */
   type?: BicyclePathType;
+}
+
+export interface BicyclePathContinuationArray
+{
+  nextToken?: string;
+  items: BicyclePath[];
 }

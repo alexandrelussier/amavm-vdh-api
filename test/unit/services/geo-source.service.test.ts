@@ -1,7 +1,6 @@
 import { GeoSourceService, MTLOpenDataGeoSourceService } from "@services/geo-source.service";
 import { expect } from "chai";
 import nock = require("nock");
-import { httpClientFactory } from "uno-serverless";
 
 // tslint:disable-next-line:max-line-length
 const MTL_OPEN_DATA_BICYCLE_PATH_URL = "http://donnees.ville.montreal.qc.ca/dataset/5ea29f40-1b5b-4f34-85b3-7c67088ff536/resource/0dc6612a-be66-406b-b2d9-59c9e1c65ebf/download/reseau_cyclable_2018_juillet2018.geojson";
@@ -23,9 +22,7 @@ describe("MTLOpenDataGeoSourceService", () => {
   });
 
   beforeEach(() => {
-    service = new MTLOpenDataGeoSourceService(
-      { bicyclePathsSourceUrl: MTL_OPEN_DATA_BICYCLE_PATH_URL },
-      httpClientFactory({}));
+    service = new MTLOpenDataGeoSourceService({ bicyclePathsSourceUrl: MTL_OPEN_DATA_BICYCLE_PATH_URL });
   });
 
   const nockIt = (name: string, test: () => Promise<any>) => {

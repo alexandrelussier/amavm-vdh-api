@@ -1,9 +1,8 @@
 import { BicyclePath, BicyclePathDivider, BicyclePathNetwork, BicyclePathType } from "@entities/bicycle-paths";
 import { bicyclePathSchema } from "@entities/schemas";
 import { FeatureCollection, MultiLineString, Position } from "geojson";
-import proj4 = require("proj4/dist/proj4");
-import { HttpClient, validateAndThrow } from "uno-serverless";
-import windows1252 = require("windows-1252");
+import proj4 = require("proj4");
+import { Response, Request, Filter, FilterChain, newHttpClient } from 'typescript-http-client'
 
 /** The GeoSourceService is responsible for getting source geographical information. */
 export interface GeoSourceService {
@@ -12,7 +11,7 @@ export interface GeoSourceService {
 }
 
 export interface MTLOpenDataGeoSourceServiceOptions {
-  bicyclePathsSourceUrl: string | Promise<string>;
+  bicyclePathsSourceUrl: string | undefined;
 }
 
 export class MTLOpenDataGeoSourceService implements GeoSourceService {
@@ -24,23 +23,15 @@ export class MTLOpenDataGeoSourceService implements GeoSourceService {
   private readonly transformCoordinates = proj4(this.sourceCoordinateSystem, this.destinationCoordinateSystem);
 
   public constructor(
-    private readonly options: MTLOpenDataGeoSourceServiceOptions,
-    private readonly httpClient: HttpClient) { }
+    private readonly options: MTLOpenDataGeoSourceServiceOptions) { }
 
   public async getBicyclePaths(): Promise<BicyclePath[]> {
-    const response = await this.httpClient.get<MTLOpenDataBicyclePath>(
-      await this.options.bicyclePathsSourceUrl,
-      {
-        // Data is windows 1252-encoded. Thx MTL.
-        /*responseType: "arraybuffer",
-        transformResponse: (res) => {
-          const rawStr = new Uint8Array(res).reduce((acc, cur) => acc + String.fromCharCode(cur), "");
-          return JSON.parse(windows1252.decode(rawStr));
-        },*/
-      });
+    const client = newHttpClient();
+    const request = new Request(this.options.bicyclePathsSourceUrl!);
+    const response = await client.execute<MTLOpenDataBicyclePath>(request);
 
-    const result = response.data.features
-      .filter((x) => x.properties.Ville_MTL === "OUI")
+    const result = response.features
+    .filter((x) => x.properties.Ville_MTL === "OUI")
       .map<BicyclePath>((x) => ({
         borough: x.properties.NOM_ARR_VI,
         divider: this.convertDivider(x.properties.SEPARATEUR),
@@ -55,12 +46,6 @@ export class MTLOpenDataGeoSourceService implements GeoSourceService {
         type: this.convertType(Math.trunc(x.properties.TYPE_VOIE)),
       }));
 
-    validateAndThrow(
-      {
-        items: bicyclePathSchema,
-        type: "array",
-      }, result);
-
     return result;
   }
 
@@ -71,7 +56,7 @@ export class MTLOpenDataGeoSourceService implements GeoSourceService {
         (y) => {
           return this.transformCoordinates
             .forward([y[0], y[1]])
-            .map((z) => parseFloat(z.toFixed(10)))
+            .map((z: number) => parseFloat(z.toFixed(10)))
             .reverse();
         }));
   }

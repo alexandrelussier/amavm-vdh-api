@@ -2,11 +2,33 @@ import { BicyclePath, GeoJSONBicyclePathProperties } from "@entities/bicycle-pat
 import { BicyclePathsService } from "@services/bicycle-paths.service";
 import { GeoSourceService } from "@services/geo-source.service";
 import { Feature, FeatureCollection, MultiLineString } from "geojson";
-import { toRecord } from "uno-serverless";
 import { AssetsService } from "./assets.service";
 
 export interface SyncService {
   sync(): Promise<void>;
+}
+
+export function toRecord<T extends { id: string, [x: string]: any }>(values: T[]): Record<string, T>;
+export function toRecord<T extends { id: string, [x: string]: any }, U>(
+  values: T[],
+  valueFunc: (x: T) => U): Record<string, U>;
+export function toRecord<U>(
+  values: string[],
+  valueFunc: (x: string) => U): Record<string, U>;
+export function toRecord<T, U>(
+  values: T[],
+  valueFunc: (x: T) => U,
+  idFunc: (x: T) => string): Record<string, U>;
+export function toRecord(
+  values: any[],
+  valueFunc: (x: any) => any = (x) => x,
+  idFunc: (x: any) => string = (x) => x.id ? x.id : x.toString()): any {
+  return values.reduce(
+    (acc, cur) => {
+      acc[idFunc(cur)] = valueFunc(cur);
+      return acc;
+    },
+    {});
 }
 
 export class DefaultSyncService implements SyncService {

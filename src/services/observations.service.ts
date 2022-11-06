@@ -1,17 +1,14 @@
 import {
   GetObservationsRequest, GetObservationsRequestSort, ObservationRequest,
-  ObservationStatus, ReportedObservation, UpdateObservationStatusRequest,
+  ObservationStatus, ReportedObservation, ReportedObservationContinuationArray, UpdateObservationStatusRequest,
 } from "@entities/observations";
-import { MongoClient, MongoClientOptions, ObjectID } from "mongodb";
-import {
-  CheckHealth, checkHealth, ContinuationArray, decodeNextToken,
-  encodeNextToken, HealthCheckResult, lazyAsync, notFoundError, validationError,
-} from "uno-serverless";
+import { MongoClient, MongoClientOptions, ObjectID, Db } from "mongodb";
 import { AssetsService } from "./assets.service";
+import { CheckHealth } from "./health";
 
-export interface ObservationsService {
+export interface ObservationsService extends CheckHealth {
   delete(observationId: string): Promise<void>;
-  find(request: GetObservationsRequest): Promise<ContinuationArray<ReportedObservation>>;
+  find(request: GetObservationsRequest): Promise<ReportedObservationContinuationArray>;
   get(observationId: string): Promise<ReportedObservation | undefined>;
   /** Reports an observation. */
   report(request: ObservationRequest): Promise<ReportedObservation>;
@@ -19,34 +16,32 @@ export interface ObservationsService {
 }
 
 export interface MongoDbBicyclePathsServiceOptions {
-  url: string | Promise<string>;
-  db: string | Promise<string>;
-  mongoOptions?: MongoClientOptions | Promise<MongoClientOptions | undefined>;
+  url: string | undefined;
+  db: string | undefined;
+  mongoOptions?: MongoClientOptions;
 }
 
 export const OBSERVATIONS_COLLECTION = "observations";
 const DEFAULT_LIMIT = 200;
 
-export class MongoDbObservationsService implements ObservationsService, CheckHealth {
+export class MongoDbObservationsService implements ObservationsService {
 
-  private readonly lazyClient = lazyAsync(
-    async () => {
-      const client = new MongoClient(
-        await this.options.url,
-        await this.options.mongoOptions);
+  private readonly lazyClient = new MongoClient(
+        this.options.url!,
+        this.options.mongoOptions);
 
-      await client.connect();
-      return client;
-    });
-
-  private readonly lazyDb = lazyAsync(async () => (await this.lazyClient()).db(await this.options.db));
+  private readonly lazyDb: Db;
 
   public constructor(
     private readonly options: MongoDbBicyclePathsServiceOptions,
-    private readonly assetsService: AssetsService) { }
+    private readonly assetsService: AssetsService) { this.lazyDb = this.lazyClient.db(this.options.db); }
 
-  public async checkHealth(): Promise<HealthCheckResult> {
-    return checkHealth(
+  public async init() {
+    await this.lazyClient.connect();
+  }
+
+  public async checkHealth(): Promise<boolean> {
+    return true;/*checkHealth(
       "MongoDbObservationsService",
       undefined,
       async () => {
@@ -54,14 +49,14 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
         await db.collection(OBSERVATIONS_COLLECTION).createIndex({ timestamp: 1 });
         await db.collection(OBSERVATIONS_COLLECTION).createIndex({ attributes: 1 });
         await db.collection(OBSERVATIONS_COLLECTION).createIndex({ status: 1 });
-      });
+      });*/
   }
 
   public async delete(observationId: string): Promise<void> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     const result = await db.collection(OBSERVATIONS_COLLECTION).findOneAndDelete({ id: observationId });
     if (!result.ok) {
-      throw notFoundError("observationId", `Observation ${observationId} not found.`);
+      throw {status: 404, message: `Observation ${observationId} not found.`};
     }
 
     for (const asset of (result.value.assets || [])) {
@@ -71,9 +66,9 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
     }
   }
 
-  public async find(request: GetObservationsRequest): Promise<ContinuationArray<ReportedObservation>> {
-    const db = await this.lazyDb();
-    const nextToken = decodeNextToken<NextToken>(request.nextToken);
+  public async find(request: GetObservationsRequest): Promise<ReportedObservationContinuationArray> {
+    const db = await this.lazyDb;
+    const nextToken = JSON.parse(request.nextToken!.toString()) as NextToken;
     let pagination: Pagination;
     if (!nextToken) {
       pagination = { skip: 0, limit: DEFAULT_LIMIT };
@@ -151,10 +146,10 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
     request.nextToken = undefined;
     const nextNextToken = result.length < pagination.limit
       ? undefined
-      : encodeNextToken({
+      : Buffer.from(JSON.stringify({
         pagination,
         request,
-      });
+      })).toString("base64");
     return {
       items: result.map((x) => this.mapObservation(x)),
       nextToken: nextNextToken,
@@ -162,7 +157,7 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
   }
 
   public async get(observationId: string): Promise<ReportedObservation | undefined> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     const result = await db.collection(OBSERVATIONS_COLLECTION).findOne({ id: observationId });
     if (!result) {
       return undefined;
@@ -172,17 +167,10 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
   }
 
   public async report(request: ObservationRequest): Promise<ReportedObservation> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     const now = Math.trunc(new Date().getTime() / 1000);
     if (request.timestamp > now) {
-      throw validationError([{
-        code: "invalid",
-        data: {
-          currentServerTimestamp: now,
-        },
-        message: "Timestamp cannot be in the future",
-        target: "timestamp",
-      }]);
+      throw {status: 400, message: "Timestamp cannot be in the future"};
     }
 
     const reportedObs: ReportedObservation = {
@@ -208,7 +196,7 @@ export class MongoDbObservationsService implements ObservationsService, CheckHea
 
   public async updateStatus(observationId: string, request: UpdateObservationStatusRequest)
     : Promise<ReportedObservation> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     await db.collection(OBSERVATIONS_COLLECTION).updateOne(
       { id: observationId },
       { $set: { status: request.status } },

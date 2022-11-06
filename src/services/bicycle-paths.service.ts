@@ -1,53 +1,48 @@
-import { BicyclePath, BicyclePathsRequest } from "@entities/bicycle-paths";
-import { MongoClient, MongoClientOptions } from "mongodb";
-import {
-  CheckHealth, checkHealth, ContinuationArray, decodeNextToken,
-  encodeNextToken, HealthCheckResult, lazyAsync, notFoundError, validationError,
-} from "uno-serverless";
+import { BicyclePath, BicyclePathsRequest, BicyclePathContinuationArray } from "@entities/bicycle-paths";
+import { MongoClient, MongoClientOptions, Db } from "mongodb";
+import { CheckHealth } from "./health";
 
-export interface BicyclePathsService {
+export interface BicyclePathsService extends CheckHealth {
   delete(id: string): Promise<void>;
   get(id: string): Promise<BicyclePath | undefined>;
   findAll(): Promise<BicyclePath[]>;
-  find(request: BicyclePathsRequest): Promise<ContinuationArray<BicyclePath>>;
+  find(request: BicyclePathsRequest): Promise<BicyclePathContinuationArray>;
   set(bp: BicyclePath): Promise<BicyclePath>;
 }
 
 export interface MongoDbBicyclePathsServiceOptions {
-  url: string | Promise<string>;
-  db: string | Promise<string>;
-  mongoOptions?: MongoClientOptions | Promise<MongoClientOptions | undefined>;
+  url: string | undefined;
+  db: string | undefined;
+  mongoOptions?: MongoClientOptions;
 }
 
 export const BICYCLE_PATH_COLLECTION = "bicycle-paths";
 const DEFAULT_LIMIT = 200;
 
-export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHealth {
+export class MongoDbBicyclePathsService implements BicyclePathsService {
 
-  private readonly lazyClient = lazyAsync(
-    async () => {
-      const client = new MongoClient(
-        await this.options.url,
-        await this.options.mongoOptions);
+  private readonly lazyClient = new MongoClient(
+    this.options.url!,
+    this.options.mongoOptions);
 
-      await client.connect();
-      return client;
-    });
+  private readonly lazyDb: Db;
 
-  private readonly lazyDb = lazyAsync(async () => (await this.lazyClient()).db(await this.options.db));
+  public constructor(private readonly options: MongoDbBicyclePathsServiceOptions) {this.lazyDb = this.lazyClient.db(this.options.db);}
 
-  public constructor(private readonly options: MongoDbBicyclePathsServiceOptions) {}
+  public async init() {
+    await this.lazyClient.connect();
+  }
 
-  public async checkHealth(): Promise<HealthCheckResult> {
-    return checkHealth(
+  public async checkHealth(): Promise<boolean> {
+    return true;/*checkHealth(
       "MongoDbBicyclePathsService",
       undefined,
       async () => {
         const db = await this.lazyDb();
-        return new Promise((resolve, reject) => {
+        return new Promise<void>((resolve, reject) => {
           db.collection(BICYCLE_PATH_COLLECTION).createIndex(
             { geometry : "2dsphere" },
-            (err, _) => {
+            (err: any, _: any) => {
               if (err) {
                 reject(err);
               } else {
@@ -55,16 +50,16 @@ export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHea
               }
             });
         });
-      });
+      });*/
   }
 
   public async delete(id: string): Promise<void> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     await db.collection(BICYCLE_PATH_COLLECTION).deleteOne({ id });
   }
 
   public async get(id: string): Promise<BicyclePath | undefined> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     const response = await db.collection(BICYCLE_PATH_COLLECTION).findOne({ id });
     if (!response) {
       return undefined;
@@ -73,9 +68,9 @@ export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHea
     return this.mapBp(response);
   }
 
-  public async find(request: BicyclePathsRequest): Promise<ContinuationArray<BicyclePath>> {
-    const db = await this.lazyDb();
-    const nextToken = decodeNextToken<NextToken>(request.nextToken);
+  public async find(request: BicyclePathsRequest): Promise<BicyclePathContinuationArray> {
+    const db = await this.lazyDb;
+    const nextToken = JSON.parse(request.nextToken!.toString()) as NextToken;
     let pagination: Pagination;
     if (!nextToken) {
       pagination = { skip: 0, limit: request.limit || DEFAULT_LIMIT };
@@ -87,12 +82,7 @@ export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHea
     let query: any = {};
     if (request.bbox) {
       if (request.bbox.length !== 4) {
-        throw validationError([{
-          code: "invalid",
-          message:
-            "Bounding box must have 4 numbers to specify the 4 corners. Order is SW lat, SW long, NE lat, NE long",
-          target: "bbox",
-        }]);
+        throw {status: 400, message: "Bounding box must have 4 numbers to specify the 4 corners. Order is SW lat, SW long, NE lat, NE long"};
       }
       const bbox = {
         geometry: {
@@ -120,11 +110,7 @@ export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHea
 
     if (request.near) {
       if (request.near.length !== 2) {
-        throw validationError([{
-          code: "invalid",
-          message: "Near must have 2 numbers to specify the coordinates",
-          target: "near",
-        }]);
+        throw {status: 400, message: "Near must have 2 numbers to specify the coordinates"};
       }
       const near = {
         geometry: {
@@ -180,24 +166,24 @@ export class MongoDbBicyclePathsService implements BicyclePathsService, CheckHea
     request.nextToken = undefined;
     const nextNextToken = result.length < pagination.limit
       ? undefined
-      : encodeNextToken({
+      : Buffer.from(JSON.stringify({
         pagination,
         request,
-      });
+      })).toString("base64");
     return {
-      items: result.map((x) => this.mapBp(x)),
+      items: result.map((x: any) => this.mapBp(x)),
       nextToken: nextNextToken,
     };
   }
 
   public async findAll(): Promise<BicyclePath[]> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     return (await db.collection(BICYCLE_PATH_COLLECTION).find().toArray())
-      .map((x) => this.mapBp(x));
+      .map((x: any) => this.mapBp(x));
   }
 
   public async set(bp: BicyclePath): Promise<BicyclePath> {
-    const db = await this.lazyDb();
+    const db = await this.lazyDb;
     await db.collection(BICYCLE_PATH_COLLECTION).updateOne({ id: bp.id }, { $set: bp }, { upsert: true });
     return bp;
   }
