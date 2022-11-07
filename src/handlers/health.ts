@@ -13,7 +13,7 @@ class HealthCheckResult implements HealthCheckResult {
   public observationHealth = false;
 }
 
-export const handler = app.get('/api/health', async (req, res) => {
+export const handler = app.get('/api/health/', async (req, res) => {
   const container = app.locals.container as Container;
   let health = new HealthCheckResult();
   health.assetsHealth = await container.assetsService().checkHealth();
